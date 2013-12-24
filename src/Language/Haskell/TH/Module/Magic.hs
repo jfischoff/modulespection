@@ -10,13 +10,10 @@ module Language.Haskell.TH.Module.Magic
    ) where
 import Language.Haskell.TH
 import Language.Haskell.TH.Syntax
-import Control.Lens
-import Control.Lens.TH
 import Control.Applicative
 import Data.List
 import Control.Monad
 import Data.Char
-import Language.Haskell.TH.Lens
 import Control.Arrow
 import Data.Maybe
 import qualified GHC
@@ -24,7 +21,6 @@ import Module
 import GHC.Paths ( libdir )
 import DynFlags 
 import Name hiding (Name)
-import Control.Lens
 import NameSet
 import HscTypes( tyThingParent_maybe )
 import qualified RdrName as RdrName

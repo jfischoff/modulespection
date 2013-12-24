@@ -21,8 +21,6 @@ library
   other-extensions:    TemplateHaskell, MultiParamTypeClasses, RankNTypes, DeriveFunctor, LambdaCase, StandaloneDeriving
   build-depends: base >=4.6 && <4.7
                , template-haskell >=2.7 && <2.9
-               , lens >=3.9 && <3.10
-               , haskell-src-exts >=1.13 && <1.14
                , ghc-paths >=0.1 && <0.2
                , ghc
   hs-source-dirs:      src
