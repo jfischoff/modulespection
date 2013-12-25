@@ -4,110 +4,136 @@
 {-# LANGUAGE DeriveFunctor             #-}
 {-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE StandaloneDeriving        #-}
+{-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE FlexibleInstances             #-}
 module Language.Haskell.TH.Module.Magic 
    ( declarations
    , getModuleDeclarations
    ) where
-import Language.Haskell.TH
-import Language.Haskell.TH.Syntax
-import Control.Applicative
-import Data.List
-import Control.Monad
-import Data.Char
-import Control.Arrow
+import Language.Haskell.TH as TH
 import Data.Maybe
-import qualified GHC
+import GHC
 import Module
 import GHC.Paths ( libdir )
 import DynFlags 
-import Name hiding (Name)
-import NameSet
-import HscTypes( tyThingParent_maybe )
-import qualified RdrName as RdrName
-import RdrName ( getGRE_NameQualifier_maybes )
-import Debug.Trace 
+import Name as Name
+import RdrName 
 import MonadUtils
+import HsDecls as HsDecls
+import SrcLoc
+import Bag
+import Data.Monoid
 
-traceMsg :: Show a => String -> a -> a
-traceMsg msg x = trace (msg ++ show x) x
-
-lookupModule :: GHC.GhcMonad m => String -> m Module
-lookupModule mName = lookupModuleName (GHC.mkModuleName mName)
-
-lookupModuleName :: GHC.GhcMonad m => ModuleName -> m Module
-lookupModuleName mName = GHC.lookupModule mName Nothing
-
-wantInterpretedModule :: GHC.GhcMonad m => String -> m Module
-wantInterpretedModule str = wantInterpretedModuleName (GHC.mkModuleName str)
-
-wantInterpretedModuleName :: GHC.GhcMonad m => ModuleName -> m Module
-wantInterpretedModuleName modname = do
-   modl <- lookupModuleName modname
-   let str = moduleNameString modname
-   dflags <- getDynFlags
-   is_interpreted <- GHC.moduleIsInterpreted modl
-
-   return modl
-
--- Get all the declarations of the current file that 
--- can be parsed by 
+-- | Get all the type declarations of the current file
 declarations :: Q [Dec]
 declarations = getModuleDeclarations . loc_filename =<< location
 
+-- | Look up a name, and get out the declaration 
+--   or return nothing
+nameToMaybeDec :: TH.Name -> Q (Maybe Dec)
+nameToMaybeDec name = do
+   info <- reify name
+   return $ case info of
+      TyConI dec -> Just dec
+      _          -> Nothing   
+
+-- | Get all the type declarations of a given module. 
+--   Accepts either a file path or a module name
 getModuleDeclarations :: String -> Q [Dec]
 getModuleDeclarations moduleStr = do
     names <- runIO $ getModuleNames moduleStr
+    mapMaybeM nameToMaybeDec names
 
-    let maybeDec n = do
-            info <- reify n
-            case info of
-                TyConI dec -> return $ Just dec
-                _          -> return Nothing
+-- | Either try to parse a source file or if the module is
+--   part of library, look it up and browse the contents
+lookupModuleNames :: GhcMonad m => String -> m [TH.Name]
+lookupModuleNames mName = do   
+   target <- targetId <$> guessTarget mName Nothing
+   case target of
+      TargetModule moduleName -> getExistingModuleNames 
+                             =<< lookupModule moduleName Nothing
+      TargetFile filePath _   -> parseFile filePath
 
-    mapMaybeM maybeDec names
+-- | Turn ErrorMessages into a String
+errString :: Show a => Bag a -> String     
+errString = unlines 
+          . map show 
+          . foldBag (<>) (:[]) []
 
-getModuleNames :: String -> IO [Name]
-getModuleNames moduleStr = GHC.defaultErrorHandler defaultFatalMessager 
-    defaultFlushOut $ do
-      GHC.runGhc (Just libdir) $ do
-        dflags <- GHC.getSessionDynFlags
-        GHC.setSessionDynFlags dflags
-        md <- wantInterpretedModule moduleStr
-        browseModule md
+-- | Parse a file and collect all of the declarations names
+parseFile :: GhcMonad m => FilePath -> m [TH.Name]
+parseFile filePath = do
+   dflags <- getDynFlags
+   src    <- liftIO $ readFile filePath 
+   let (warns, L _ hsModule) = 
+         either (error . errString) id
+               $ parser src dflags filePath
+                                 
+       names = mapMaybe getNameMaybe $ hsmodDecls hsModule
+       
+   return $ map rdrNameToName names
 
-filterOutChildren :: (a -> GHC.TyThing) -> [a] -> [a]
-filterOutChildren get_thing xs
-  = filterOut has_parent xs
-  where
-    all_names = mkNameSet (map (GHC.getName . get_thing) xs)
-    has_parent x = case tyThingParent_maybe (get_thing x) of
-                     Just p  -> GHC.getName p `elemNameSet` all_names
-                     Nothing -> False
+-- | Initialize the GHC API and lookup the module names
+getModuleNames :: String -> IO [TH.Name]
+getModuleNames target = 
+   defaultErrorHandler 
+      defaultFatalMessager 
+      defaultFlushOut 
+      $ do
+         runGhc (Just libdir) $ do
+           dflags <- getSessionDynFlags
+           setSessionDynFlags dflags
+           lookupModuleNames target
 
-filterOut :: (a -> Bool) -> [a] -> [a]
-filterOut p xs = filter (not . p) xs
+showModuleName :: Module -> String
+showModuleName = moduleNameString . moduleName
 
-browseModule :: GHC.GhcMonad m => Module -> m [Name]
-browseModule modl = do
-  -- :browse reports qualifiers wrt current context
-  unqual <- GHC.getPrintUnqual
+getExistingModuleNames :: GhcMonad m => Module -> m [TH.Name]
+getExistingModuleNames modl = do
+  moduleInfo <- getModuleInfo modl
+  case moduleInfo of
+    Nothing -> error $ "modulespection: Failed to find module info for "
+                     <> showModuleName modl
+                     <> " in getExistingModuleNames"
+    Just mod_info -> fmap (map (occNameToName . nameOccName . getName))
+                  .  mapMaybeM lookupName 
+                  $  modInfoExports mod_info
 
-  mb_mod_info <- GHC.getModuleInfo modl
-  case mb_mod_info of
-    Nothing -> error "browseModule"
-    Just mod_info -> do
-        dflags <- getDynFlags
-        let names = GHC.modInfoExports mod_info
+-- | Simple Class for getting the name of things
+class GetNameMaybe a where
+   getNameMaybe :: a -> Maybe RdrName
 
-        mb_things <- mapM GHC.lookupName $ (\x -> trace (show $ length x) x) $ names
-        let things = catMaybes $ (\x -> trace (show $ length x) x) mb_things
-            --things = filterOutChildren (\t -> t) (catMaybes mb_things)
+instance GetNameMaybe (HsDecl RdrName) where
+   getNameMaybe = \case 
+      TyClD x -> getNameMaybe x
+      HsDecls.ValD  x -> getNameMaybe x
+      _           -> Nothing
 
-        rdr_env <- GHC.getGRE
+instance GetNameMaybe (TyClDecl RdrName) where
+   getNameMaybe = \case
+      ForeignType x _   -> getNameMaybe x
+      x@(TyFamily   {}) -> getNameMaybe $ tcdLName x
+      TyDecl    x _ _ _ -> getNameMaybe x
+      x@(ClassDecl {})  -> getNameMaybe $ tcdLName x
 
-        let modNames   = map GHC.getName things
+instance GetNameMaybe (HsBindLR RdrName RdrName) where
+   getNameMaybe = \case 
+      x@(FunBind {}) -> getNameMaybe $ fun_id x 
+      _                  -> Nothing
 
-            importInfo = RdrName.getGRE_NameQualifier_maybes rdr_env
+instance GetNameMaybe a => GetNameMaybe (GenLocated SrcSpan a) where
+   getNameMaybe (L _ x) = getNameMaybe x 
 
-        return $ map (mkName . occNameString . nameOccName) modNames
+instance GetNameMaybe RdrName where
+   getNameMaybe = Just
 
+-- Name Utils
+occNameToName :: OccName -> TH.Name
+occNameToName = mkName . occNameString 
+
+rdrNameToName :: RdrName -> TH.Name
+rdrNameToName = \case 
+   RdrName.Unqual x -> occNameToName x
+   RdrName.Qual _ x -> occNameToName x
+   RdrName.Orig _ x -> occNameToName x
+   RdrName.Exact  x -> occNameToName $ nameOccName x
