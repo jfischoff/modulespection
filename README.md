@@ -6,7 +6,7 @@ Collect all of the declarations in a module using Template Haskell (via the GHC 
 One can either get all the names, or just the declarations (only type declarations
 are supported right now).
 
-Here is a quick example
+Here is a quick example:
 ```haskell 
 import Language.Haskell.TH.Module.Magic (names)
 
@@ -21,7 +21,7 @@ someFunction = id
 names >>= runIO . print >> return []
 ```
 
-Which will spew the following when compiling.
+Which will spew the following when compiling:
 
 ```
 [Test,OtherTest,someFunction]
@@ -41,7 +41,7 @@ newtype OtherTest = OtherTest Test
 concatMapM (deriveJSON defaultOptions) =<< declarations
 ```
 
-Which will makes the JSON instances for `Test` and `OtherTest` and any other types
+Which will make JSON instances for `Test`, `OtherTest` and any other types
 added to the file.
 
 You can also do the same thing for an existing module.
