@@ -53,6 +53,8 @@ description:
  > concatMapM (deriveJSON defaultOptions) =<< moduleDeclarations "Data.Monoid"
  .
  Which will build instances for all the types in "Data.Monoid".
+ 
+ * 1.0.4 Parses LANGUAGE pragmas and does CPP preprocessing
 
 license:             BSD3
 license-file:        LICENSE
