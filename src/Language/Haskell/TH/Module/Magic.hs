@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE CPP               #-}
 module Language.Haskell.TH.Module.Magic 
    ( -- * Name Introspection
      names
@@ -8,6 +9,9 @@ module Language.Haskell.TH.Module.Magic
    , declarations
    , moduleDeclarations
    ) where
+
+#include "ghcplatform.h"
+   
 import Language.Haskell.TH as TH
 import Data.Maybe
 import GHC
@@ -22,6 +26,18 @@ import SrcLoc
 import Bag
 import Control.Monad
 import Data.Monoid
+import System.IO.Temp
+import HeaderInfo
+import DriverPipeline
+import SysTools
+import Packages
+import Config
+import qualified Control.Monad.IO.Class as MTL
+import Control.Monad.Catch
+import Exception (throwIO)
+import GhcMonad
+import GHC.IO.Handle
+import System.FilePath.Posix (takeBaseName)
 
 -- | Get all the top level declarations of the current file.
 --   All names are returned whether they are exported or not.
@@ -65,15 +81,46 @@ declarations = mapMaybeM nameToMaybeDec =<< names
 moduleDeclarations :: String -> Q [Dec]
 moduleDeclarations = mapMaybeM nameToMaybeDec <=< moduleNames 
 
+instance MTL.MonadIO Ghc where
+    liftIO = MonadUtils.liftIO
+
+instance MonadCatch Ghc where
+    catch   = gcatch
+    throwM  = liftIO . throwIO
+    mask f =
+       Ghc $ \s -> mask $ \io_restore ->
+                              let
+                                 g_restore (Ghc m) = Ghc $ \s -> io_restore (m s)
+                              in
+                                 unGhc (f g_restore) s
+    uninterruptibleMask = error "uninterruptibleMask"
 -- | Either try to parse a source file or if the module is
 --   part of library, look it up and browse the contents
-lookupModuleNames :: GhcMonad m => String -> m [TH.Name]
+lookupModuleNames :: (MTL.MonadIO m, MonadCatch m, GhcMonad m) 
+                  => String -> m [TH.Name]
 lookupModuleNames mName = do   
    target <- targetId <$> guessTarget mName Nothing
    case target of
       TargetModule moduleName -> getExistingModuleNames 
                              =<< lookupModule moduleName Nothing
-      TargetFile filePath _   -> parseFile filePath
+      TargetFile filePath _   -> do 
+         dflags            <- getSessionDynFlags
+         opts              <- liftIO $ getOptionsFromFile dflags filePath
+         (newDFlags, unhandledFlags, _) <- 
+            liftIO $ parseDynamicFilePragma dflags opts
+         liftIO $ checkProcessArgsResult newDFlags unhandledFlags
+         if (xopt Opt_Cpp newDFlags) then do
+            liftIO $ print "in cpp"
+            withSystemTempFile (takeBaseName filePath <> ".cpp") $ \cppFilePath handle -> do
+               liftIO $ hClose handle
+               liftIO $ doCpp newDFlags True False filePath cppFilePath
+               srcOpts <- liftIO $ getOptionsFromFile newDFlags cppFilePath
+               (newestDFlags, unhandled_flags, warns)
+                   <- liftIO $ parseDynamicFilePragma newDFlags srcOpts
+               liftIO $ checkProcessArgsResult newestDFlags unhandled_flags
+               parseFile newestDFlags cppFilePath
+         else 
+            parseFile dflags filePath
 
 -- | Turn ErrorMessages into a String
 errString :: Show a => Bag a -> String     
@@ -82,9 +129,8 @@ errString = unlines
           . foldBag (<>) (:[]) []
 
 -- | Parse a file and collect all of the declarations names
-parseFile :: GhcMonad m => FilePath -> m [TH.Name]
-parseFile filePath = do
-   dflags <- getDynFlags
+parseFile :: GhcMonad m => DynFlags -> FilePath -> m [TH.Name]
+parseFile dflags filePath = do
    src    <- liftIO $ readFile filePath 
    let (warns, L _ hsModule) = 
          either (error . errString) id
@@ -146,3 +192,62 @@ rdrNameToName = \case
    RdrName.Qual _ x -> occNameToName x
    RdrName.Orig _ x -> occNameToName x
    RdrName.Exact  x -> occNameToName $ nameOccName x
+
+doCpp :: DynFlags -> Bool -> Bool -> FilePath -> FilePath -> IO ()
+doCpp dflags raw include_cc_opts input_fn output_fn = do
+   let hscpp_opts = getOpts dflags opt_P
+   let cmdline_include_paths = includePaths dflags
+
+   pkg_include_dirs <- getPackageIncludePath dflags []
+   let include_paths = foldr (\ x xs -> "-I" : x : xs) []
+                         (cmdline_include_paths ++ pkg_include_dirs)
+
+   let verbFlags = getVerbFlags dflags
+
+   let cc_opts
+         | include_cc_opts = getOpts dflags opt_c
+         | otherwise       = []
+
+   let cpp_prog args | raw       = SysTools.runCpp dflags args
+                     | otherwise = SysTools.runCc dflags (SysTools.Option "-E" : args)
+
+   let target_defs =
+         [ "-D" ++ HOST_OS     ++ "_BUILD_OS=1",
+           "-D" ++ HOST_ARCH   ++ "_BUILD_ARCH=1",
+           "-D" ++ TARGET_OS   ++ "_HOST_OS=1",
+           "-D" ++ TARGET_ARCH ++ "_HOST_ARCH=1" ]
+       -- remember, in code we *compile*, the HOST is the same our TARGET,
+       -- and BUILD is the same as our HOST.
+
+   cpp_prog       (   map SysTools.Option verbFlags
+                   ++ map SysTools.Option include_paths
+                   ++ map SysTools.Option hsSourceCppOpts
+                   ++ map SysTools.Option target_defs
+                   ++ map SysTools.Option hscpp_opts
+                   ++ map SysTools.Option cc_opts
+                   ++ [ SysTools.Option     "-x"
+                      , SysTools.Option     "c"
+                      , SysTools.Option     input_fn
+       -- We hackily use Option instead of FileOption here, so that the file
+       -- name is not back-slashed on Windows.  cpp is capable of
+       -- dealing with / in filenames, so it works fine.  Furthermore
+       -- if we put in backslashes, cpp outputs #line directives
+       -- with *double* backslashes.   And that in turn means that
+       -- our error messages get double backslashes in them.
+       -- In due course we should arrange that the lexer deals
+       -- with these \\ escapes properly.
+                      , SysTools.Option     "-o"
+                      , SysTools.FileOption "" output_fn
+                      ])
+
+hsSourceCppOpts :: [String]
+-- Default CPP defines in Haskell source
+hsSourceCppOpts =
+         [ "-D__GLASGOW_HASKELL__="++cProjectVersionInt ]
+
+
+
+
+
+
+
