@@ -110,7 +110,6 @@ lookupModuleNames mName = do
             liftIO $ parseDynamicFilePragma dflags opts
          liftIO $ checkProcessArgsResult newDFlags unhandledFlags
          if (xopt Opt_Cpp newDFlags) then do
-            liftIO $ print "in cpp"
             withSystemTempFile (takeBaseName filePath <> ".cpp") $ \cppFilePath handle -> do
                liftIO $ hClose handle
                liftIO $ doCpp newDFlags True False filePath cppFilePath
