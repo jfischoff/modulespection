@@ -3,7 +3,7 @@
 
 name:                modulespection
 version:             0.1.0.0
-synopsis:            Template Haskell introspecting a modules declarations
+synopsis:            Template Haskell for introspecting a modules declarations
 description: 
  Collect all of the declarations in a module using Template Haskell (via the GHC API). 
  . 
