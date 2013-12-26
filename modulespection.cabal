@@ -58,6 +58,7 @@ license:             BSD3
 license-file:        LICENSE
 author:              Jonathan Fischoff
 maintainer:          jonathangfischoff@gmail.com
+homepage: https://github.com/jfischoff/modulespection
 -- copyright:           
 category:            Language
 build-type:          Simple
