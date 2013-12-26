@@ -3,8 +3,24 @@
 
 name:                modulespection
 version:             0.1.0.0
-synopsis:            Template Haskell introspecting the cmodules declarations
--- description:         
+synopsis:            Template Haskell introspecting a modules declarations
+description: 
+ Collect all of the declarations in a module using Template Haskell (via the GHC API). 
+ . 
+ One can either get all the names, or just the declarations (only type declarations)
+ are supported right now).
+ .
+ Here is a quick example
+ . 
+ >> data Test = Test Int
+ >> newtype OtherTest = OtherTest Test
+ >> 
+ >> someFunction :: String -> String
+ >> someFunction = id
+ >> 
+ >> names >>= runIO . print >> return []
+ > [Test,OtherTest,someFunction]
+
 license:             BSD3
 license-file:        LICENSE
 author:              Jonathan Fischoff
@@ -18,7 +34,8 @@ cabal-version:       >=1.10
 library
   exposed-modules:     Language.Haskell.TH.Module.Magic
   -- other-modules:       
-  other-extensions:    TemplateHaskell, MultiParamTypeClasses, RankNTypes, DeriveFunctor, LambdaCase, StandaloneDeriving
+  other-extensions: LambdaCase
+                  , FlexibleInstances
   build-depends: base >=4.6 && <4.7
                , template-haskell >=2.7 && <2.9
                , ghc-paths >=0.1 && <0.2

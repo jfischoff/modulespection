@@ -1,14 +1,12 @@
-{-# LANGUAGE TemplateHaskell           #-}
-{-# LANGUAGE MultiParamTypeClasses     #-}
-{-# LANGUAGE RankNTypes                #-}
-{-# LANGUAGE DeriveFunctor             #-}
-{-# LANGUAGE LambdaCase                #-}
-{-# LANGUAGE StandaloneDeriving        #-}
-{-# LANGUAGE TupleSections             #-}
-{-# LANGUAGE FlexibleInstances             #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE FlexibleInstances #-}
 module Language.Haskell.TH.Module.Magic 
-   ( declarations
-   , getModuleDeclarations
+   ( -- * Name Introspection
+     names
+   , moduleNames
+     -- * Declaration Introspection
+   , declarations
+   , moduleDeclarations
    ) where
 import Language.Haskell.TH as TH
 import Data.Maybe
@@ -22,11 +20,28 @@ import MonadUtils
 import HsDecls as HsDecls
 import SrcLoc
 import Bag
+import Control.Monad
 import Data.Monoid
 
--- | Get all the type declarations of the current file
-declarations :: Q [Dec]
-declarations = getModuleDeclarations . loc_filename =<< location
+-- | Get all the top level declarations of the current file.
+--   All names are returned whether they are exported or not.
+names :: Q [TH.Name]
+names = moduleNames . loc_filename =<< location
+
+-- | Get all the top level names of a given module. 
+--   If a file path is used, all names, exported and internal
+--   are returned. If a module name is used, only the exported
+--   names are returned.
+moduleNames :: String -> Q [TH.Name]
+moduleNames target = runIO $ 
+   defaultErrorHandler 
+      defaultFatalMessager 
+      defaultFlushOut 
+      $ do
+         runGhc (Just libdir) $ do
+           dflags <- getSessionDynFlags
+           setSessionDynFlags dflags
+           lookupModuleNames target
 
 -- | Look up a name, and get out the declaration 
 --   or return nothing
@@ -35,14 +50,20 @@ nameToMaybeDec name = do
    info <- reify name
    return $ case info of
       TyConI dec -> Just dec
-      _          -> Nothing   
+      _          -> Nothing
+      
+-- | Get all the type declarations of the current file. 
+--   Function and pattern declarations are ignored ... for now.
+declarations :: Q [Dec]
+declarations = mapMaybeM nameToMaybeDec =<< names
 
--- | Get all the type declarations of a given module. 
---   Accepts either a file path or a module name
-getModuleDeclarations :: String -> Q [Dec]
-getModuleDeclarations moduleStr = do
-    names <- runIO $ getModuleNames moduleStr
-    mapMaybeM nameToMaybeDec names
+-- | Get all the top level names of a given module. 
+--   If a file path is used, all names, exported and internal
+--   are returned. If a module name is used, only the exported
+--   names are returned.
+--   Function and pattern declarations are ignored ... for now.
+moduleDeclarations :: String -> Q [Dec]
+moduleDeclarations = mapMaybeM nameToMaybeDec <=< moduleNames 
 
 -- | Either try to parse a source file or if the module is
 --   part of library, look it up and browse the contents
@@ -72,18 +93,6 @@ parseFile filePath = do
        names = mapMaybe getNameMaybe $ hsmodDecls hsModule
        
    return $ map rdrNameToName names
-
--- | Initialize the GHC API and lookup the module names
-getModuleNames :: String -> IO [TH.Name]
-getModuleNames target = 
-   defaultErrorHandler 
-      defaultFatalMessager 
-      defaultFlushOut 
-      $ do
-         runGhc (Just libdir) $ do
-           dflags <- getSessionDynFlags
-           setSessionDynFlags dflags
-           lookupModuleNames target
 
 showModuleName :: Module -> String
 showModuleName = moduleNameString . moduleName
