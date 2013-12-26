@@ -1,1 +1,2 @@
 * 1.0.4 Logic for parsing LANGUAGE flags and CPP preprocessing
+* 1.0.5 Use language extension even in the absence of CPP

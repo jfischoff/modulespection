@@ -1,12 +1,19 @@
 {-# LANGUAGE TemplateHaskell #-}
-module OtherTypes where
+{-# LANGUAGE LambdaCase #-}
+module SomeTypes where
 import Language.Haskell.TH
 import Language.Haskell.TH.Module.Magic
-import Data.Monoid
-import SomeTypes
+import Data.Maybe
 
-$(do  
-     dec <- getModuleDeclarations "SomeTypes"
-     runIO $ print dec
 
-     return [])
+data Test = Test Int
+
+newtype OtherTest = OtherTest Test
+
+
+someOtherFunction :: Bool -> Bool
+someOtherFunction = \case
+   True  -> False
+   False -> True
+
+names >>= runIO . print >> return []

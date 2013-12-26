@@ -120,7 +120,7 @@ lookupModuleNames mName = do
                liftIO $ checkProcessArgsResult newestDFlags unhandled_flags
                parseFile newestDFlags cppFilePath
          else 
-            parseFile dflags filePath
+            parseFile newDFlags filePath
 
 -- | Turn ErrorMessages into a String
 errString :: Show a => Bag a -> String     
