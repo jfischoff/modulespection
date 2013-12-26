@@ -19,7 +19,7 @@ someFunction = id
 -- 'names' is Template Haskell function that will collect all of the 
 -- toplevel declaration names of the current file.
 names >>= runIO . print >> return []
-```haskell
+```
 
 Which will spew the following when compiling.
 
@@ -39,7 +39,7 @@ data Test = Test Int
 newtype OtherTest = OtherTest Test
 
 concatMapM (deriveJSON defaultOptions) =<< declarations
-```haskell
+```
 
 Which will makes the JSON instances for `Test` and `OtherTest` and any other types
 added to the file.
