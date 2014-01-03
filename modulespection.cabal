@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                modulespection
-version:             0.1.0.6
+version:             0.1.0.7
 synopsis:            Template Haskell for introspecting a module's declarations
 description: 
  Collect all of the declarations in a module using Template Haskell (via the GHC API). 
@@ -33,7 +33,7 @@ description:
  .
  > import Data.Aeson.TH (deriveJSON, defaultOptions)
  > import MonadUtils (concatMapM)
- > import Language.Haskell.TH.Module.Magic (names)
+ > import Language.Haskell.TH.Module.Magic (declarations)
  > 
  > data Test = Test Int
  > newtype OtherTest = OtherTest Test
@@ -47,7 +47,7 @@ description:
  .
  > import Data.Aeson.TH (deriveJSON, defaultOptions)
  > import MonadUtils (concatMapM)
- > import Language.Haskell.TH.Module.Magic (names)
+ > import Language.Haskell.TH.Module.Magic (moduleDeclarations)
  > import Data.Monoid
  > 
  > concatMapM (deriveJSON defaultOptions) =<< moduleDeclarations "Data.Monoid"

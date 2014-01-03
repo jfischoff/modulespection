@@ -33,7 +33,7 @@ types have `ToJSON`/`FromJSON` instances.
 ```haskell
 import Data.Aeson.TH (deriveJSON, defaultOptions)
 import MonadUtils (concatMapM)
-import Language.Haskell.TH.Module.Magic (names)
+import Language.Haskell.TH.Module.Magic (declarations)
 
 data Test = Test Int
 newtype OtherTest = OtherTest Test
@@ -49,7 +49,7 @@ You can also do the same thing for an existing module.
 ```haskell
 import Data.Aeson.TH (deriveJSON, defaultOptions)
 import MonadUtils (concatMapM)
-import Language.Haskell.TH.Module.Magic (names)
+import Language.Haskell.TH.Module.Magic (moduleDeclarations)
 import Data.Monoid
 
 concatMapM (deriveJSON defaultOptions) =<< moduleDeclarations "Data.Monoid"
