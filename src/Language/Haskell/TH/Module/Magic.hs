@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE CPP               #-}
+{-# LANGUAGE NamedFieldPuns    #-}
 module Language.Haskell.TH.Module.Magic 
    ( -- * Name Introspection
      names
@@ -81,8 +82,10 @@ declarations = mapMaybeM nameToMaybeDec =<< names
 moduleDeclarations :: String -> Q [Dec]
 moduleDeclarations = mapMaybeM nameToMaybeDec <=< moduleNames 
 
+#if __GLASGOW_HASKELL__ < 707
 instance MTL.MonadIO Ghc where
     liftIO = MonadUtils.liftIO
+#endif
 
 instance MonadCatch Ghc where
     catch   = gcatch
@@ -166,8 +169,15 @@ instance GetNameMaybe (HsDecl RdrName) where
 instance GetNameMaybe (TyClDecl RdrName) where
    getNameMaybe = \case
       ForeignType x _   -> getNameMaybe x
+#if __GLASGOW_HASKELL__ >= 707
+      FamDecl x -> getNameMaybe $ fdLName x 
+      SynDecl  { tcdLName } -> getNameMaybe tcdLName
+      DataDecl { tcdLName } -> getNameMaybe tcdLName
+#else
       x@(TyFamily   {}) -> getNameMaybe $ tcdLName x
       TyDecl    x _ _ _ -> getNameMaybe x
+#endif
+      
       x@(ClassDecl {})  -> getNameMaybe $ tcdLName x
 
 instance GetNameMaybe (HsBindLR RdrName RdrName) where
