@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                modulespection
-version:             0.1.2.0
+version:             0.1.2.1
 synopsis:            Template Haskell for introspecting a module's declarations
 description: 
  Collect all of the declarations in a module using Template Haskell (via the GHC API). 
@@ -76,7 +76,7 @@ library
                , ghc
                , temporary == 1.2.*
                , transformers == 0.3.*
-               , exceptions >= 0.3 && < 0.6
+               , exceptions >= 0.5 && < 0.6
                , filepath == 1.3.*
   hs-source-dirs:      src
   default-language:    Haskell2010

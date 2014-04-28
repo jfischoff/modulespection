@@ -87,9 +87,11 @@ instance MTL.MonadIO Ghc where
     liftIO = MonadUtils.liftIO
 #endif
 
+instance MonadThrow Ghc where
+    throwM  = liftIO . throwIO
+
 instance MonadCatch Ghc where
     catch   = gcatch
-    throwM  = liftIO . throwIO
     mask f =
        Ghc $ \s -> mask $ \io_restore ->
                               let
