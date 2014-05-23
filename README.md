@@ -33,12 +33,12 @@ types have `ToJSON`/`FromJSON` instances.
 ```haskell
 import Data.Aeson.TH (deriveJSON, defaultOptions)
 import MonadUtils (concatMapM)
-import Language.Haskell.TH.Module.Magic (declarations)
+import Language.Haskell.TH.Module.Magic (names)
 
 data Test = Test Int
 newtype OtherTest = OtherTest Test
 
-concatMapM (deriveJSON defaultOptions) =<< declarations
+concatMapM (deriveJSON defaultOptions) =<< names
 ```
 
 Which will make JSON instances for `Test`, `OtherTest` and any other types
@@ -49,10 +49,10 @@ You can also do the same thing for an existing module.
 ```haskell
 import Data.Aeson.TH (deriveJSON, defaultOptions)
 import MonadUtils (concatMapM)
-import Language.Haskell.TH.Module.Magic (moduleDeclarations)
+import Language.Haskell.TH.Module.Magic (moduleNames)
 import Data.Monoid
 
-concatMapM (deriveJSON defaultOptions) =<< moduleDeclarations "Data.Monoid"
+concatMapM (deriveJSON defaultOptions) =<< moduleNames "Data.Monoid"
 ```
 
 Which will build instances for all the types in `Data.Monoid`.
