@@ -92,6 +92,8 @@ instance MonadThrow Ghc where
 
 instance MonadCatch Ghc where
     catch   = gcatch
+
+instance MonadMask Ghc where
     mask f =
        Ghc $ \s -> mask $ \io_restore ->
                               let
@@ -101,7 +103,7 @@ instance MonadCatch Ghc where
     uninterruptibleMask = error "uninterruptibleMask"
 -- | Either try to parse a source file or if the module is
 --   part of library, look it up and browse the contents
-lookupModuleNames :: (MTL.MonadIO m, MonadCatch m, GhcMonad m) 
+lookupModuleNames :: (MTL.MonadIO m, MonadCatch m, MonadMask m, GhcMonad m)
                   => String -> m [TH.Name]
 lookupModuleNames mName = do   
    target <- targetId <$> guessTarget mName Nothing
