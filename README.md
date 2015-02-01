@@ -1,7 +1,7 @@
 #modulespection 
 ###Template Haskell Module Introspection 
 
-![travis build status](https://travis-ci.org/cheecheeo/modulespection.svg?branch=exceptions_bump)
+[![travis build status](https://travis-ci.org/jfischoff/modulespection.svg?branch=master)](https://travis-ci.org/jfischoff/modulespection/builds)
 
 Collect all of the declarations in a module using Template Haskell (via the GHC API). 
  
