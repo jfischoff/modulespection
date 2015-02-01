@@ -172,7 +172,9 @@ instance GetNameMaybe (HsDecl RdrName) where
 
 instance GetNameMaybe (TyClDecl RdrName) where
    getNameMaybe = \case
+#if __GLASGOW_HASKELL__ < 710
       ForeignType x _   -> getNameMaybe x
+#endif
 #if __GLASGOW_HASKELL__ >= 707
       FamDecl x -> getNameMaybe $ fdLName x 
       SynDecl  { tcdLName } -> getNameMaybe tcdLName
