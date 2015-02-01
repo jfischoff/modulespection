@@ -10,7 +10,6 @@ module Language.Haskell.TH.Module.Magic
    , declarations
    , moduleDeclarations
    ) where
-
 #include "ghcplatform.h"
    
 import Language.Haskell.TH as TH
