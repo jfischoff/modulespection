@@ -29,3 +29,5 @@ deploy:
     secure: KB/RTjtRrRNgW5uzUxsdlEFkGzbCCpEjknCRrlkTrbAiMU0C1sFlyCeQRmEOrBIj8r7CTtEDLAXfSVqC6hhb0/yWXy6DG1UDkC+ZpPFleqzIEo+d8TcjddWGBr835+RBC+SAcDn7Eu9geVAaDH6JjO46TskuqSRrdKVf4QvHwgk=
   on:
     repo: jfischoff/modulespection
+    tags: true
+    all_branches: true
